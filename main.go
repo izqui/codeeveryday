@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -27,7 +28,10 @@ func main() {
 
 	nchan := make(chan int)
 
-	go monitor(nchan)
+	user = flag.String("user", "izqui", "Github Username for contributions graph")
+	flag.Parse()
+
+	go monitor(user, nchan)
 	go listen(nchan)
 
 	//Program will be forever waiting for this channel to be sent data
@@ -58,11 +62,13 @@ func setupGPIO() gpio.Pin {
 	return p
 }
 
-func monitor(nchan chan int) {
+func monitor(username string, nchan chan int) {
+
+	time.Sleep(5 * time.Second)
 
 	for {
 
-		res, err := http.Get("https://github.com/users/izqui/contributions_calendar_data")
+		res, err := http.Get("https://github.com/users/" + username + "/contributions_calendar_data")
 		if err == nil {
 
 			var data []interface{}
@@ -98,12 +104,12 @@ func listen(nchan chan int) {
 				pin.Set()
 			}
 		}
-		fmt.Println("For")
 		if contributions == 0 {
 
 			pin.Set()
 			time.Sleep(time.Second / 2)
 			pin.Clear()
+			time.Sleep(time.Second / (3 / 4))
 		}
 	}
 }
