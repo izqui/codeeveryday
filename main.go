@@ -4,13 +4,17 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"time"
 
 	"github.com/izqui/helpers"
-	"github.com/stianeikeland/go-rpio"
+
+	"github.com/davecheney/gpio"
+	"github.com/davecheney/gpio/rpi"
 )
 
-var pin rpio.Pin
+var pin gpio.Pin
+
 var contributions int
 
 func init() {
@@ -19,7 +23,7 @@ func init() {
 }
 func main() {
 
-	setupGPIO()
+	pin = setupGPIO()
 
 	nchan := make(chan int)
 
@@ -32,20 +36,26 @@ func main() {
 	panic("Suicide")
 }
 
-func setupGPIO() {
+func setupGPIO() gpio.Pin {
 
-	pin := rpio.Pin(25)
-
-	if err := rpio.Open(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+	p, err := gpio.OpenPin(rpi.GPIO25, gpio.ModeOutput)
+	if err != nil {
+		panic(err)
 	}
 
-	// Unmap gpio memory when done
-	defer rpio.Close()
+	// turn the led off on exit
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		for _ = range c {
+			fmt.Printf("\nClearing and unexporting the pin.\n")
+			pin.Clear()
+			pin.Close()
+			os.Exit(0)
+		}
+	}()
 
-	// Set pin to output mode
-	pin.Output()
+	return p
 }
 
 func monitor(nchan chan int) {
@@ -69,7 +79,7 @@ func monitor(nchan chan int) {
 			fmt.Println(err)
 		}
 
-		time.Sleep(time.Second / 2)
+		time.Sleep(time.Second)
 	}
 }
 
@@ -85,14 +95,15 @@ func listen(nchan chan int) {
 				//Number of contributions has changed
 				contributions = n
 
-				pin.High()
+				pin.Set()
 			}
 		}
 		fmt.Println("For")
 		if contributions == 0 {
 
-			pin.Toggle()
+			pin.Set()
 			time.Sleep(time.Second / 2)
+			pin.Clear()
 		}
 	}
 }
