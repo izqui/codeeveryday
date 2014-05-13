@@ -5,7 +5,7 @@ This is a little project to encourage me to open source, and therefore write, co
 
 It checks my Github Public Contributions Graph and plays a sound and lights a LED when I push code.
 
-A blog post is coming.
+A blog post should be coming.
 
 ### Resources
 

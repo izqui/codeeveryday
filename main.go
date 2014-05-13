@@ -14,24 +14,19 @@ import (
 	"github.com/davecheney/gpio/rpi"
 )
 
-var pin gpio.Pin
+var redPin, greenPin gpio.Pin
 
-var contributions int
-
-func init() {
-
-	contributions = 0
-}
 func main() {
 
-	pin = setupGPIO()
+	redPin, greenPin = setupGPIO()
 
-	nchan := make(chan int)
-
-	user = flag.String("user", "izqui", "Github Username for contributions graph")
+	user := flag.String("user", "izqui", "Github Username for contributions graph")
 	flag.Parse()
+	fmt.Printf("User: %s\n", *user)
 
-	go monitor(user, nchan)
+	//MAIN
+	nchan := make(chan int)
+	go monitor(*user, nchan)
 	go listen(nchan)
 
 	//Program will be forever waiting for this channel to be sent data
@@ -40,9 +35,14 @@ func main() {
 	panic("Suicide")
 }
 
-func setupGPIO() gpio.Pin {
+func setupGPIO() (gpio.Pin, gpio.Pin) {
 
-	p, err := gpio.OpenPin(rpi.GPIO25, gpio.ModeOutput)
+	p1, err := gpio.OpenPin(rpi.GPIO17, gpio.ModeOutput)
+	if err != nil {
+		panic(err)
+	}
+
+	p2, err := gpio.OpenPin(rpi.GPIO21, gpio.ModeOutput)
 	if err != nil {
 		panic(err)
 	}
@@ -53,18 +53,18 @@ func setupGPIO() gpio.Pin {
 	go func() {
 		for _ = range c {
 			fmt.Printf("\nClearing and unexporting the pin.\n")
-			pin.Clear()
-			pin.Close()
+			p1.Clear()
+			p1.Close()
+			p2.Clear()
+			p2.Close()
 			os.Exit(0)
 		}
 	}()
 
-	return p
+	return p1, p2
 }
 
 func monitor(username string, nchan chan int) {
-
-	time.Sleep(5 * time.Second)
 
 	for {
 
@@ -76,7 +76,6 @@ func monitor(username string, nchan chan int) {
 			helpers.DecodeJSON(res.Body, &data)
 
 			n := int(data[len(data)-1].([]interface{})[1].(float64)) //Send last value, index 1
-			fmt.Println(n)
 
 			nchan <- n
 
@@ -91,6 +90,8 @@ func monitor(username string, nchan chan int) {
 
 func listen(nchan chan int) {
 
+	contributions := int(0)
+	light(redPin, greenPin)
 	for {
 
 		select {
@@ -101,15 +102,22 @@ func listen(nchan chan int) {
 				//Number of contributions has changed
 				contributions = n
 
-				pin.Set()
+				fmt.Printf("Contributions today: %i \n", contributions)
+
+				if contributions > 0 {
+
+					light(greenPin, redPin)
+				} else {
+					light(redPin, greenPin)
+				}
 			}
 		}
-		if contributions == 0 {
-
-			pin.Set()
-			time.Sleep(time.Second / 2)
-			pin.Clear()
-			time.Sleep(time.Second / (3 / 4))
-		}
 	}
+}
+
+func light(on, off gpio.Pin) {
+
+	off.Clear()
+	on.Set()
+
 }
